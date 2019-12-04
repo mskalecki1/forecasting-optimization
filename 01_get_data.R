@@ -8,7 +8,7 @@
 #' @params
 #' @param dateFrom - data range in whole data set starts from this date
 #' @param dateTo - data range in whole data set ends on this date
-#' @param dataSplitRatio - splits data set into train (<= ratio) and test (> ratio)
+#' @param dataSplitRatio - splits data set into train and test
 #' 
 #' @output
 #' Returns train and test dataframes for forecasting models
@@ -20,9 +20,9 @@ GetData <- function(dateFrom = '2014-10-01',
                     dateTo = '2016-05-31',
                     dataSplitRatio = 0.8) {
   
-  # dateFrom <- '2014-10-01'
-  # dateTo <- '2016-05-31'
-  # dataSplitRatio <- 0.8
+  dateFrom <- '2014-10-01'
+  dateTo <- '2016-05-31'
+  dataSplitRatio <- 0.8
   
   
   ## Read and join data -----------------------------
@@ -61,6 +61,7 @@ GetData <- function(dateFrom = '2014-10-01',
   
 
   ## Handle NAs -----------------------------
+  # Change NA values into mean from obsToMean observations
   summary(dataJoned)
   whichNA <- which(is.na(dataJoned$avg_temp))
   whichNAColnames <- c('avg_temp', 'min_temp', 'max_temp')
@@ -87,16 +88,27 @@ GetData <- function(dateFrom = '2014-10-01',
   dataJoned$coef7 <- MakeDelays(delayDays = 7)
   dataJoned$coef14 <- MakeDelays(delayDays = 14)
   
-  ## __ temperature increments -----------------------------
-  #
   
+  ## __ variable increments -----------------------------
+  # Difference between t+1 and t
+  MakeIncrements <- function(columnName) {
+    increment <- c(NA, dataJoned[2:(nrow(dataJoned)), columnName] - dataJoned[1:(nrow(dataJoned)-1), columnName])
+    return(increment)
+  }
+  dataJoned$d_avg_temp <- MakeIncrements(columnName = 'avg_temp')
+  dataJoned$d_min_temp <- MakeIncrements(columnName = 'min_temp')
+  dataJoned$d_max_temp <- MakeIncrements(columnName = 'max_temp')
+  dataJoned$d_coef <- MakeIncrements(columnName = 'coef')
   
   
   ## Change data range -----------------------------
   selectedRows <- dplyr::between(dataJoned$date, as.Date(dateFrom), as.Date(dateTo))
   dataJoned <- dataJoned[selectedRows, ]
-  ## Chech for NAs once again
-  summary(dataJoned)
+  ## Check NA once again
+  stillNAInDataSet <- all(unlist(apply(dataJoned, 2, function(x) unique(is.na(x)))))
+  if(stillNAInDataSet) {
+    warning("There are still some NAs in the data set.")
+  }
   
   
   ## Split to train and test -----------------------------
@@ -105,4 +117,9 @@ GetData <- function(dateFrom = '2014-10-01',
   test <- dataJoned[(dataSplitRow+1):nrow(dataJoned), ]
   
   
+  ## Return data -----------------------------
+  return(list(trainSet = train,
+              testSet = test))
+  
 }
+
